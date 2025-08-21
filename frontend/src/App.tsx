@@ -437,17 +437,21 @@ function App() {
       
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       
-      // Create mesh with vertex colors
-      const material = new THREE.MeshPhongMaterial({
+      // Create mesh with basic material first to ensure visibility
+      const material = new THREE.MeshBasicMaterial({
         vertexColors: true,
         side: THREE.DoubleSide,
-        shininess: 30,
-        emissive: 0x222222,
-        emissiveIntensity: 0.3
+        wireframe: false
       });
       
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(0, 0, 0);
+      
+      // Also create a simple test cube to verify rendering
+      const testGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+      const testCube = new THREE.Mesh(testGeometry, testMaterial);
+      testCube.position.set(0, 0, 0);
       
       // Remove old mesh
       if (meshRef.current && sceneRef.current) {
@@ -458,58 +462,79 @@ function App() {
       
       // Add new mesh
       if (sceneRef.current) {
+        // Clear the entire scene first
+        while(sceneRef.current.children.length > 0) {
+          const child = sceneRef.current.children[0];
+          sceneRef.current.remove(child);
+        }
+        
+        // Re-add lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        sceneRef.current.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        directionalLight.position.set(5, 10, 5);
+        sceneRef.current.add(directionalLight);
+        
+        // Add test cube first to verify rendering works
+        sceneRef.current.add(testCube);
+        console.log('Test cube added at origin');
+        
+        // Add the actual mesh
         sceneRef.current.add(mesh);
         meshRef.current = mesh;
         
-        // Add wireframe helper for debugging
-        const wireframe = new THREE.WireframeGeometry(geometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, opacity: 0.3, transparent: true });
-        const lineSegments = new THREE.LineSegments(wireframe, lineMaterial);
-        sceneRef.current.add(lineSegments);
+        // Create axes helper to see coordinate system
+        const axesHelper = new THREE.AxesHelper(5);
+        sceneRef.current.add(axesHelper);
+        console.log('Axes helper added');
         
-        // Add bounding box helper to see where the model is
-        const box = new THREE.BoxHelper(mesh, 0xffff00);
-        sceneRef.current.add(box);
-        
-        // Get the actual bounds and center the camera on it
+        // Get the actual bounds
         const boundingBox = geometry.boundingBox!;
         const center = new THREE.Vector3();
         boundingBox.getCenter(center);
         const size = new THREE.Vector3();
         boundingBox.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
         
-        // Debug: Log mesh details
-        console.log('Mesh added to scene:', {
-          vertices: geometry.attributes.position.count,
-          hasColors: !!geometry.attributes.color,
-          boundingBox: boundingBox,
-          center: center.toArray(),
-          size: size.toArray(),
-          maxDimension: maxDim,
-          meshPosition: mesh.position.toArray(),
-          meshScale: mesh.scale.toArray(),
-          visible: mesh.visible
+        // Debug: Log everything
+        console.log('Scene debug:', {
+          sceneChildren: sceneRef.current.children.length,
+          meshVertices: geometry.attributes.position.count,
+          boundingBox: {
+            min: boundingBox.min.toArray(),
+            max: boundingBox.max.toArray(),
+            center: center.toArray(),
+            size: size.toArray()
+          },
+          meshWorldMatrix: mesh.matrixWorld.toArray()
         });
         
-        // Position camera based on model size
+        // Simple camera setup
         if (cameraRef.current) {
-          const distance = maxDim * 2;
-          cameraRef.current.position.set(0, maxDim * 0.5, distance);
-          cameraRef.current.lookAt(center);
+          cameraRef.current.position.set(5, 5, 10);
+          cameraRef.current.lookAt(0, 0, 0);
           cameraRef.current.updateProjectionMatrix();
           
-          console.log('Camera positioned:', {
+          console.log('Camera setup:', {
             position: cameraRef.current.position.toArray(),
-            lookingAt: center.toArray(),
-            distance: distance
+            target: [0, 0, 0],
+            fov: cameraRef.current.fov,
+            near: cameraRef.current.near,
+            far: cameraRef.current.far
           });
         }
         
-        // Force a render
+        // Force render multiple times
         if (rendererRef.current && cameraRef.current) {
           rendererRef.current.render(sceneRef.current, cameraRef.current);
-          console.log('Forced render complete');
+          
+          // Try rendering a few times with delay
+          setTimeout(() => {
+            if (rendererRef.current && cameraRef.current && sceneRef.current) {
+              rendererRef.current.render(sceneRef.current, cameraRef.current);
+              console.log('Delayed render complete');
+            }
+          }, 100);
         }
       }
       
